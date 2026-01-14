@@ -27,6 +27,7 @@ type ennemi struct {
 	w, h         float32
 	ShootCadence float32
 	speed        float32
+	canMove      bool
 	clr          color.RGBA
 }
 
@@ -94,12 +95,15 @@ func (b *bullet) DirigeToPlayer() {
 }
 
 func ShootBullet(ennemi *ennemi, bulletS []bullet, player player) []bullet {
-	if math.Abs(float64(ennemi.x)-float64(player.x)) > 250 {
-		return bulletS
-	}
 
 	if ennemi.ShootCadence > 0 {
 		ennemi.ShootCadence--
+		ennemi.canMove = false
+		return bulletS
+	}
+	ennemi.canMove = true
+
+	if math.Abs(float64(ennemi.x)-float64(player.x)) > 175 {
 		return bulletS
 	}
 
@@ -144,12 +148,47 @@ func (p *player) Mouvement() {
 	}
 }
 
+func (p *player) CheckMouvement() {
+	if p.x < 0 {
+		p.x = 0
+		return
+	} else if p.x+p.w > screenWidth {
+		p.x = screenWidth - p.w
+		return
+	} else if p.y < 0 {
+		p.y = 0
+		return
+	} else if p.y+p.h > screenHeight {
+		p.y = screenHeight - p.h
+		return
+	}
+	p.Mouvement()
+}
+
+func CircleRectCollision(cx, cy, cr, rx, ry, rw, rh float64) bool {
+	closestX := math.Max(rx, math.Min(cx, rx+rw))
+	closestY := math.Max(ry, math.Min(cy, ry+rh))
+	dx := cx - closestX
+	dy := cy - closestY
+
+	return dx*dx+dy*dy <= cr*cr
+}
+
+func (b bullet) checkCollsion(p *player) bool {
+	if CircleRectCollision(float64(b.x), float64(b.y), float64(b.radius), float64(p.x), float64(p.y), float64(p.w), float64(p.h)) {
+		return true
+	}
+	return false
+}
+
 func (g *Game) Update() error {
 	// ennemi mouv.
-	DirigePointToPoint(g.ennemi.speed, &g.ennemi, g.player)
+	if g.ennemi.canMove {
+		DirigePointToPoint(g.ennemi.speed, &g.ennemi, g.player)
+	}
 
 	// player mouv.
-	g.player.Mouvement()
+	g.player.CheckMouvement()
 
 	// create bullet
 	g.bullet = ShootBullet(&g.ennemi, g.bullet, g.player)
@@ -157,6 +196,11 @@ func (g *Game) Update() error {
 	// dirige bullet
 	for i := range g.bullet {
 		g.bullet[i].DirigeToPlayer()
+
+		// Check if bullets touch player
+		if g.bullet[i].checkCollsion(&g.player) {
+			g.player = player{}
+		}
 	}
 
 	// delete bullets for the game not lagging
